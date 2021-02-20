@@ -1,0 +1,81 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.SignalR.Client
+
+@inject NavigationManager NavigationManager
+@implements IDisposable
+@inject IMessageService mService
+
+    <main>
+        
+        <div class="app w-100">
+            @if (newMessage.UserName == null)
+            {
+                <input type="text" class="form-control" name="message" id="message" @bind="newMessage.UserName" placeholder="Choose a User Name and Start Chating">
+                <button disabled="@(!IsConnected)">Send</button>
+            }
+            else
+            {
+                <div class="content px-4">
+                    <div class="message-screen">
+                        <ul class="message-list my-4">
+                            @foreach (var message in messages)
+                            {
+                                <li>
+                                    <div class="message">
+                                        <div class="message-author">@message.UserName</div>
+                                        <div class="message-content">@message.Content</div>
+                                        <small class="message-time text-muted">@message.TimeStamp</small>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                        <div class="message-form mb-4">
+                            <input type="text" class="form-control" name="message" id="message" @bind="newMessage.Content" placeholder="Message">                          
+                            <button @onclick="Send" disabled="@(!IsConnected)">Send</button>
+                        </div>
+                    </div>
+
+                </div>
+            }
+        </div>
+    </main>
+    @code {
+        private HubConnection hubConnection;
+        private List<Message> messages = new List<Message>();
+        private Message newMessage { set; get; } = new Message();
+
+        protected override async Task OnInitializedAsync()
+        {
+            //imgurl = "C:\\Users\\Tahir Can\\Desktop\\lamborghini-sian-roadster.jpg";
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/chathub"))
+                .Build();
+
+            hubConnection.On<Message>("ReceiveMessage", (mess) =>
+            {
+                messages.Add(mess);
+                StateHasChanged();
+            });
+
+            await hubConnection.StartAsync();
+            messages = await mService.GetMessages();
+        }
+        public async void Send()
+        {
+            newMessage.TimeStamp = DateTime.Now;
+            SendHub();
+            mService.AddMessage(newMessage);
+            newMessage.Content = null;
+
+        }
+        Task SendHub() =>
+            hubConnection.SendAsync("SendMessage", newMessage);
+
+        public bool IsConnected =>
+            hubConnection.State == HubConnectionState.Connected;
+
+        public void Dispose()
+        {
+            _ = hubConnection.DisposeAsync();
+        }
+}
